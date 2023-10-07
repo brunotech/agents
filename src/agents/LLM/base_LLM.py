@@ -19,9 +19,9 @@ class OpenAILLM(LLM):
         super().__init__()
         self.MAX_CHAT_HISTORY = eval(
             os.environ["MAX_CHAT_HISTORY"]) if "MAX_CHAT_HISTORY" in os.environ else 10
-        
-        self.model = kwargs["model"] if "model" in kwargs else "gpt-3.5-turbo-16k-0613"
-        self.temperature = kwargs["temperature"] if "temperature" in  kwargs else 0.3
+
+        self.model = kwargs.get("model", "gpt-3.5-turbo-16k-0613")
+        self.temperature = kwargs.get("temperature", 0.3)
         self.log_path = kwargs["log_path"].replace("/",os.sep) if "log_path" in kwargs else "logs"
     
 
@@ -56,19 +56,21 @@ class OpenAILLM(LLM):
             litellm.proxy = os.environ["PROXY"]
         if "API_BASE" in os.environ:
             litellm.api_base = os.environ["API_BASE"]
-        active_mode = True if ("ACTIVE_MODE" in os.environ and os.environ["ACTIVE_MODE"] == "0") else False
+        active_mode = "ACTIVE_MODE" in os.environ and os.environ["ACTIVE_MODE"] == "0"
         model = self.model
         temperature = self.temperature
-        
-        
+
+
         if active_mode:
-            system_prompt = system_prompt + "Please keep your reply as concise as possible."
+            system_prompt = (
+                f"{system_prompt}Please keep your reply as concise as possible."
+            )
 
         messages = [{
             "role": "system",
             "content": system_prompt
         }] if system_prompt else []
-        
+
         if chat_history:
             if len(chat_history) >  self.MAX_CHAT_HISTORY:
                 chat_history = chat_history[- self.MAX_CHAT_HISTORY:]
@@ -76,15 +78,15 @@ class OpenAILLM(LLM):
                 messages += chat_history
             elif isinstance(chat_history[0],Memory):
                 messages += [memory.get_gpt_message("user") for memory in chat_history]
-        
-        
+
+
 
         if last_prompt:
             if active_mode:
-                last_prompt = last_prompt + "Please keep your reply as concise as possible."
+                last_prompt = f"{last_prompt}Please keep your reply as concise as possible."
             # messages += [{"role": "system", "content": f"{last_prompt}"}]
             messages[-1]["content"] += last_prompt
-        
+
 
         while True:
             try:
@@ -125,13 +127,16 @@ class OpenAILLM(LLM):
 
 
 def init_LLM(default_log_path,**kwargs):
-    LLM_type = kwargs["LLM_type"] if "LLM_type" in kwargs else "OpenAI"
+    LLM_type = kwargs.get("LLM_type", "OpenAI")
     log_path = kwargs["log_path"].replace("/",os.sep) if "log_path" in kwargs else default_log_path
     if LLM_type == "OpenAI":
-        LLM = (
+        return (
             OpenAILLM(**kwargs["LLM"])
             if "LLM" in kwargs
-            else OpenAILLM(model = "gpt-3.5-turbo-16k-0613",temperature=0.3,log_path=log_path)
+            else OpenAILLM(
+                model="gpt-3.5-turbo-16k-0613",
+                temperature=0.3,
+                log_path=log_path,
+            )
         )
-        return LLM
     
