@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """helper functions for an LLM autonoumous agent"""
+
 import csv
 import random
 import json
@@ -33,10 +34,8 @@ import random
 import os
 import openai
 
-embed_model_name = os.environ["Embed_Model"] if "Embed_Model" in os.environ else "text-embedding-ada-002"
-if embed_model_name in ["text-embedding-ada-002"]:
-    pass
-else:
+embed_model_name = os.environ.get("Embed_Model", "text-embedding-ada-002")
+if embed_model_name not in ["text-embedding-ada-002"]:
     embedding_model = SentenceTransformer(
                 embed_model_name, device=torch.device("cpu")
             )
@@ -102,13 +101,16 @@ def extract(text, type):
     Returns:
         str: content between <type></type>
     """
-    target_str = get_content_between_a_b(f"<{type}>", f"</{type}>", text)
-    return target_str
+    return get_content_between_a_b(f"<{type}>", f"</{type}>", text)
 
 def count_files_in_directory(directory):
-    # 获取指定目录下的文件数目
-    file_count = len([f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))])
-    return file_count
+    return len(
+        [
+            f
+            for f in os.listdir(directory)
+            if os.path.isfile(os.path.join(directory, f))
+        ]
+    )
 
 def delete_oldest_files(directory, num_to_keep):
     # 获取目录下文件列表，并按修改时间排序
@@ -131,9 +133,7 @@ def save_logs(log_path, messages, response):
         os.mkdir(log_path)
     delete_files_if_exceed_threshold(log_path, 20, 10)
     log_path = log_path if log_path else "logs"
-    log = {}
-    log["input"] = messages
-    log["output"] = response
+    log = {"input": messages, "output": response}
     os.makedirs(log_path, exist_ok=True)
     log_file = os.path.join(
         log_path,
@@ -155,11 +155,10 @@ def cut_sent(para):
     para = para.rstrip()
     pieces = [i for i in para.split("\n") if i]
     batch_size = 3
-    chucks = [
-        " ".join(pieces[i:i + batch_size])
+    return [
+        " ".join(pieces[i : i + batch_size])
         for i in range(0, len(pieces), batch_size)
     ]
-    return chucks
 
 
 def process_document(file_path):
@@ -181,47 +180,36 @@ def process_document(file_path):
         # embedding q+chunk
         for q, a in zip(questions, answers):
             for text in cut_sent(a):
-                temp_dict = {}
-                temp_dict["q"] = q
-                temp_dict["a"] = a
-                temp_dict["chunk"] = text
-                temp_dict["emb"] = get_embedding(q + text).tolist()
+                temp_dict = {
+                    "q": q,
+                    "a": a,
+                    "chunk": text,
+                    "emb": get_embedding(q + text).tolist(),
+                }
                 final_dict[count] = temp_dict
                 count += 1
         # embedding chunk
         for q, a in zip(questions, answers):
             for text in cut_sent(a):
-                temp_dict = {}
-                temp_dict["q"] = q
-                temp_dict["a"] = a
-                temp_dict["chunk"] = text
+                temp_dict = {"q": q, "a": a, "chunk": text}
                 temp_dict["emb"] = get_embedding(text).tolist()
                 final_dict[count] = temp_dict
                 count += 1
         # embedding q
         for q, a in zip(questions, answers):
-            temp_dict = {}
-            temp_dict["q"] = q
-            temp_dict["a"] = a
-            temp_dict["chunk"] = a
+            temp_dict = {"q": q, "a": a, "chunk": a}
             temp_dict["emb"] = get_embedding(q).tolist()
             final_dict[count] = temp_dict
             count += 1
         # embedding q+a
         for q, a in zip(questions, answers):
-            temp_dict = {}
-            temp_dict["q"] = q
-            temp_dict["a"] = a
-            temp_dict["chunk"] = a
+            temp_dict = {"q": q, "a": a, "chunk": a}
             temp_dict["emb"] = get_embedding(q + a).tolist()
             final_dict[count] = temp_dict
             count += 1
         # embedding a
         for q, a in zip(questions, answers):
-            temp_dict = {}
-            temp_dict["q"] = q
-            temp_dict["a"] = a
-            temp_dict["chunk"] = a
+            temp_dict = {"q": q, "a": a, "chunk": a}
             temp_dict["emb"] = get_embedding(a).tolist()
             final_dict[count] = temp_dict
             count += 1
@@ -247,13 +235,9 @@ def process_document(file_path):
             "temp_database/",
             file_path.replace("." + file_path.split(".")[1], ".json"))
         final_dict = {}
-        count = 0
-        for c in tqdm(docs):
-            temp_dict = {}
-            temp_dict["chunk"] = c
-            temp_dict["emb"] = get_embedding(c).tolist()
+        for count, c in enumerate(tqdm(docs)):
+            temp_dict = {"chunk": c, "emb": get_embedding(c).tolist()}
             final_dict[count] = temp_dict
-            count += 1
         print(f"finish updating {len(final_dict)} data!")
         with open(save_path, "w") as f:
             json.dump(final_dict, f, ensure_ascii=False, indent=2)
@@ -322,8 +306,7 @@ def matching_a_b(a, b, requirements=None):
     a_embedder = get_embedding(a)
     # 获取embedder
     b_embeder = get_embedding(b)
-    sim_scores = cos_sim(a_embedder, b_embeder)[0]
-    return sim_scores
+    return cos_sim(a_embedder, b_embeder)[0]
 
 
 def matching_category(inputtext,
@@ -417,12 +400,10 @@ def Search_Engines(req):
         json=new_dict,
     )
     user_dict = json.loads(res.text)
-    if "data" in user_dict.keys():
-        request_items = user_dict["data"]["items"]  # 查询到的商品信息JSON
-        top_category = user_dict["data"]["topCategories"]
-        return request_items, top_category
-    else:
+    if "data" not in user_dict.keys():
         return []
+    request_items = user_dict["data"]["items"]  # 查询到的商品信息JSON
+    return request_items, user_dict["data"]["topCategories"]
 
 
 def search_with_api(requirements, categery):
@@ -430,24 +411,19 @@ def search_with_api(requirements, categery):
     FETSIZE = eval(os.environ["FETSIZE"]) if "FETSIZE" in os.environ else 5
 
     request_items = []
-    all_req_list = requirements.split(" ")  
+    all_req_list = requirements.split(" ")
     count = 0  
 
     while len(request_items) < FETSIZE and len(all_req_list) > 0:
         if count: 
-            all_req_list.pop(0)  
-        all_req = (" ").join(all_req_list)  
+            all_req_list.pop(0)
+        all_req = (" ").join(all_req_list)
         if categery not in all_req_list:
-            all_req = all_req + " " + categery
-        now_request_items, top_category = Search_Engines(all_req)  
+            all_req = f"{all_req} " + categery
+        now_request_items, top_category = Search_Engines(all_req)
         request_items = merge_list(request_items, now_request_items)
         count += 1
-    new_top = []
-    for category in top_category:
-        if "其它" in category or "其它" in category:
-            continue
-        else:
-            new_top.append(category)
+    new_top = [category for category in top_category if "其它" not in category]
     if len(request_items) > FETSIZE:
         request_items = request_items[:FETSIZE]
     return request_items, new_top
